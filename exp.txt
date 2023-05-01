@@ -1,0 +1,835 @@
+########### read a file and count number of lines...  ################# 
+ 
+ // source code
+ *.py (python file)
+ 
+ 
+import os
+
+f = open('add.c','r')
+file1 = list(f)
+
+no_of_lines = len(file1)
+
+blank_spaces = 0
+
+kwlist = ['auto', 'break', 'case', 'char', 'const', 'continue', 'default', 'do',
+'double', 'else', 'float', 'for', 'goto', 'if', 'int', 'long', 'return', 'sizeof', 'static',
+'struct', 'switch', 'void', 'while']
+
+no_of_kw = 0
+
+for line in file1:
+    for char in line:
+        if char.isspace():
+            blank_spaces += 1
+    word = line.replace('\n', ' \n').split(' ')
+    for char in word:
+        if char in kwlist:
+            print(char)
+            no_of_kw += 1
+
+blank_spaces -= no_of_lines
+log = open('logs.txt', 'w')
+log.writelines(f'Number of lines: {no_of_lines}\nNumber of whitespaces: {blank_spaces}\nNumber of keywords: {no_of_kw}')
+
+// input
+add.c 
+
+#include <stdio.h>
+
+int main(){
+    int a, b;
+    a = 5;
+    b = 12;
+    int sum = a + b;
+    printf("Sum of the two numbers is %d", sum);
+    return 69420;
+}
+
+
+##################### Pass 1 Assembler ################################
+
+// source code
+*.py (python file)
+
+
+# Initialisation
+
+MOT = {
+    "MOVEM": 1,
+    "MOVER": 2,
+    "ADD": 3,
+    "SUB": 4,
+    "MUL": 5,
+    "DIV": 6,
+    "BC": 7,
+    "COMP": 8,
+    "READ": 9,
+    "PRINT": 10
+}
+
+POT = {
+    "START": 1,
+    "END": 2,
+    "EQU": 3,
+    "ORIGIN": 4,
+    "LTORG": 5
+}
+
+DL = {
+    "DS": 1,
+    "DC": 2
+}
+
+REG = {
+    "AREG": 1,
+    "BREG": 2,
+    "CREG": 3,
+    "DREG": 4
+}
+
+SYMTAB = []
+
+LITTAB = []
+
+POOLTAB = []
+pool_1st = 1
+
+ASM = []
+# Initialisation complete
+
+# Take input program
+f = open('input.txt', 'r')
+temp = f.readlines()
+for line in temp:
+    ASM.append(line.replace("\n",""))
+f.close()
+print("Input taken")
+# Pass 1
+print("Starting Pass 1")
+loc = 0
+ic = []
+for line in ASM:
+    cmd = line.split(" ")
+
+    if cmd[0].upper() in MOT:
+        ic.append([f"{loc}", f"(IS, {MOT[cmd[0].upper()]})"])
+        loc += 1
+        if cmd[1].upper().replace(",", "") in REG: # e.g. MOVER AREG, B
+            ic[-1].append(f"{REG[cmd[1].upper().replace(',', '')]}")
+
+        if cmd[2] is None: # e.g. READ A
+            continue
+
+        elif cmd[2][0] == "=": # e.g. MOVEM CREG, ='5'
+            LITTAB.append([f"{len(LITTAB) + 1}", f"{cmd[2]}", ""])
+            ic[-1].append(f"(L, {len(LITTAB)})")
+
+        else: # e.g. MOVER AREG, B
+            SYMTAB.append([f"{len(SYMTAB) + 1}", f"{cmd[2]}", ""])
+            ic[-1].append(f"(S, {len(SYMTAB)})")
+
+    elif cmd[0].upper() in POT:
+        if POT[cmd[0].upper()] == 1: # START
+            loc = int(cmd[1])
+            ic.append(["", "(AD, 1)", "", f"(C, {loc})"])
+
+        elif POT[cmd[0].upper()] == 2: # END
+            count = 0
+            for record in LITTAB:
+                if record[-1] == "": # Find all records with empty address fields
+                    record.pop(-1)
+                    record.append(f"{loc}")
+                    ic.append([f"{loc}", "(AD, 2)", "", f"{record[1][-2]}"]) # 'record[1][-2]' is value of literal
+                    count += 1
+                    loc += 1
+            POOLTAB.append([f"{pool_1st}", f"{count}"])
+            pool_1st += count
+            break
+
+        elif POT[cmd[0].upper()] == 4: # ORIGIN
+            ic.append([f"{loc}", "No Intermediate code for ORIGIN Assembler Directive"])
+            loc = int(cmd[1]) # Go to new address
+
+        elif POT[cmd[0].upper()] == 5: # LTORG
+            count = 0
+            for record in LITTAB:
+                if record[-1] == "": # Find all records with empty address fields
+                    record.pop(-1)
+                    record.append(f"{loc}")
+                    ic.append([f"{loc}", "(AD, 5)", "", f"{record[1][-2]}"]) # 'record[1][-2]' is value of literal
+                    count += 1
+                    loc += 1
+            POOLTAB.append([f"{pool_1st}", f"{count}"])
+            pool_1st += count
+    
+    else:
+        isPresent = False
+        for record in SYMTAB:
+            if record[1] == cmd[0].upper():
+                record.pop(-1)
+                record.append(f"{loc}")
+                isPresent = True
+                break
+
+        if not isPresent:
+            SYMTAB.append([f"{len(SYMTAB) + 1}", f"{cmd[0]}", f"{loc}"])
+        
+        if cmd[1].upper() in DL:
+            ic.append([f"{loc}", f"(DL, {DL[cmd[1].upper()]})", "", f"{cmd[2]}"])
+
+        elif cmd[1].upper() in MOT:
+            ic.append([f"{loc}", f"(IS, {MOT[cmd[1].upper()]})"])
+            if cmd[2].upper().replace(",", "") in REG: # e.g. MOVER AREG, B
+                ic[-1].append(f"{REG[cmd[2].upper().replace(',', '')]}")
+
+            if cmd[3] is None: # e.g. READ A
+                continue
+
+            elif cmd[3][0] == "=": # e.g. MOVEM CREG, ='5'
+                LITTAB.append([f"{len(LITTAB) + 1}", f"{cmd[3]}", ""])
+                ic[-1].append(f"(L, {len(LITTAB)})")
+
+            else: # e.g. MOVER AREG, B
+                SYMTAB.append([f"{len(SYMTAB) + 1}", f"{cmd[3]}", ""])
+                ic[-1].append(f"(S, {len(SYMTAB)})")
+
+        elif POT[cmd[1].upper()] == 3: # EQU
+            ic.append([loc, "No Intermediate code for EQU Assembler Directive"])
+            SYMTAB[-1].pop(-1)
+            for record in SYMTAB:
+                if record[1] == cmd[2].upper(): # Change 1st symbol's address to 2nd symbol's address
+                    SYMTAB[-1].append(record[2])
+
+        loc +=1
+
+f = open('intermediateCode.txt','w')
+
+for line in ic:
+    f.write(f'{line}\n')
+f.close()
+
+f = open('tables.txt','w')
+f.write("Symbol Table\n")
+for line in SYMTAB:
+    f.write(f'{line}\n')
+f.write("\nLiteral Table\n")
+for line in LITTAB:
+    f.write(f'{line}\n')
+f.write("\nPool Table\n")
+
+for line in POOLTAB:
+    f.write(f'{line}\n')
+
+f.close()
+print("Pass 1 Done")
+
+// input
+input.txt
+
+
+START 100
+A DC 10
+MOVER AREG, B
+MOVEM BREG, ='1'
+ADD AREG, ='2'
+SUB BREG, ='1'
+B DC 20 
+ORIGIN 300
+LTORG 
+MOVER AREG, NUM
+MOVER CREG, LOOP
+ADD BREG, ='1'
+NUM DS 5 
+LOOP DC 10 
+END 
+
+
+##################### Pass 2 Assembler ################################
+
+// source code
+*.py (python file)
+
+import ast
+# Initialisation
+
+MOT = {
+    "MOVEM": 1,
+    "MOVER": 2,
+    "ADD": 3,
+    "SUB": 4,
+    "MUL": 5,
+    "DIV": 6,
+    "BC": 7,
+    "COMP": 8,
+    "READ": 9,
+    "PRINT": 10
+}
+
+POT = {
+    "START": 1,
+    "END": 2,
+    "EQU": 3,
+    "ORIGIN": 4,
+    "LTORG": 5
+}
+
+DL = {
+    "DS": 1,
+    "DC": 2
+}
+
+REG = {
+    "AREG": 1,
+    "BREG": 2,
+    "CREG": 3,
+    "DREG": 4
+}
+ic = []
+SYMTAB = []
+LITTAB = []
+POOLTAB = []
+# Initialisation complete
+
+# Take input program
+f = open('intermediateCode.txt', 'r')
+temp = f.readlines()
+for line in temp:
+    ic.append(ast.literal_eval(line))
+f.close()
+
+f = open('tables.txt', 'r')
+temp = f.readlines()
+sym = False
+lit = False
+pool = False
+for line in temp:
+    if line.replace("\n","").upper() == "SYMBOL TABLE":
+        sym = True
+        lit = False
+        pool = False
+        continue
+    elif line.replace("\n","").upper() == "LITERAL TABLE":
+        lit = True
+        sym = False
+        pool = False
+        continue
+    elif line.replace("\n","").upper() == "POOL TABLE":
+        pool = True
+        sym = False
+        lit = False
+        continue
+    if sym:
+        if line == "\n":
+            continue
+        SYMTAB.append(ast.literal_eval(line))
+    elif lit:
+        if line == "\n":
+            continue
+        LITTAB.append(ast.literal_eval(line))
+    elif pool:
+        if line == "\n":
+            continue
+        POOLTAB.append(ast.literal_eval(line))
+f.close()
+print("Input taken")
+# Pass 2
+print("Starting Pass 2")
+mc = []
+for record in ic:
+    if record[0] == "": # Skip the START statement
+        continue
+    if record[1][0] != '(': # Skip the EQU & ORIGIN statements
+        continue
+    statement = record[1].replace('(','').replace(')','').split(' ') # Split statement into statement type and its value
+    operand = record[3].replace('(','').replace(')','').split(' ') # Split operand 2 into literal/ symbol type and its value
+    if len(operand) > 1: # if operand is a value, skip 
+        record.pop(3)
+        if operand[0] == 'S,':
+            record.append(SYMTAB[int(operand[1]) - 1][-1]) # Find address location
+        elif operand[0] == 'L,':
+            record.append(LITTAB[int(operand[1]) - 1][-1]) # Find address location
+    mc.append([f"{record[0]}+", statement[1] if statement[0] == 'IS,' else '', record[2], record[3]])
+
+f = open('machineCode.txt','w')
+for line in mc:
+    f.write(f'{line}\n')
+
+f.close()
+print("Pass 2 Done")
+
+// input
+intermediateCode.txt
+
+['', '(AD, 1)', '', '(C, 100)']
+['100', '(DL, 2)', '', '10']
+['101', '(IS, 2)', '1', '(S, 2)']
+['102', '(IS, 1)', '2', '(L, 1)']
+['103', '(IS, 3)', '1', '(L, 2)']
+['104', '(IS, 4)', '2', '(L, 3)']
+['105', '(DL, 2)', '', '20']
+['106', 'No Intermediate code for ORIGIN Assembler Directive']
+['300', '(AD, 5)', '', '1']
+['301', '(AD, 5)', '', '2']
+['302', '(AD, 5)', '', '1']
+['303', '(IS, 2)', '1', '(S, 3)']
+['304', '(IS, 2)', '3', '(S, 4)']
+['305', '(IS, 3)', '2', '(L, 4)']
+['306', '(DL, 1)', '', '5']
+['307', '(DL, 2)', '', '10']
+['308', '(AD, 2)', '', '1']
+
+// input
+tables.txt
+
+Symbol Table
+['1', 'A', '100']
+['2', 'B', '105']
+['3', 'NUM', '306']
+['4', 'LOOP', '307']
+
+Literal Table
+['1', "='1'", '300']
+['2', "='2'", '301']
+['3', "='1'", '302']
+['4', "='1'", '308']
+
+Pool Table
+['1', '3']
+['4', '1']
+
+
+######################### Macro Processor #############################
+
+// source code
+*.py (python file)
+
+import re
+# Initialization of tables
+
+ASM = []
+MDT = {}
+MNT = {}
+ALA = {}
+
+def take_input_from_file():
+    global ASM
+    f = open('input.txt', 'r')
+    temp = f.readlines()
+    for line in temp:
+        ASM.append( line.replace("\n",""))
+    f.close()
+
+def read_macro_name_line(macro_name_line):
+    global MDTC
+    global MNTC
+
+    macro_name = macro_name_line.upper().replace(",", "").split()[0]
+    arguments = macro_name_line.upper().replace(",", "").split()[1:]
+
+    MDT[macro_name] = [macro_name_line]
+    MNT[macro_name] = MDTC
+
+    # Preparing argument list array
+    ALA['argument'] = []
+    for arg in arguments:
+        ALA['argument'].append(arg)
+    MDTC += 1
+    MNTC += 1
+    return macro_name
+
+def replace_dummy_arguments_with_ALA_pos_indicators(line):
+    args = [ term for term in line.upper().replace(",", "").split() if '&' == term[0]]
+    for arg in args:
+        pos_indicator = "#" + str( ALA['argument'].index(arg) + 1 )
+        line = line.replace(arg, pos_indicator)
+
+    return line
+
+if __name__ == "__main__":
+
+    
+    MDTC = 1
+    MNTC = 1
+    macro_def = False
+    macro_start = False
+    macro_name = ""
+
+    take_input_from_file()
+    for line in ASM:
+        operation = line.upper().replace(",", "").split()
+        if macro_def:
+            if not macro_start:
+                macro_name = read_macro_name_line(line)
+                replace_dummy_arguments_with_ALA_pos_indicators(line)
+                macro_start = True 
+            else:
+                MDT[macro_name].append(line.upper().replace("&ARG","#")) 
+                MDTC += 1
+        if operation[0] == 'MEND':
+            macro_def = False
+            macro_name = False
+        if operation[0] == 'MACRO':
+            macro_def = True
+            continue
+        if not macro_def and operation[0] in MNT:
+            ALA['argument'] = []
+            for i in range(2, len(operation) + 1):
+                ALA['argument'].append(operation[i - 1])
+
+    f = open('output.txt', 'w')
+    f.write('-----------------------------------------')
+    f.write('\nMacro Name Table')
+    f.write('\n-----------------------------------------')
+    f.write('\nIndex\tMacro name\tMDT Index\n')
+    for i in range(len(MNT)):
+        key = list(MNT)[i]
+        f.write(f'\n{i + 1}\t{key}\t \t{MNT[key]}')
+
+    f.write('\n\n-----------------------------------------')
+    f.write('\nMacro Definition Table')
+    f.write('\n-----------------------------------------')
+    f.write('\nIndex\tMacro Definition\n')
+    keys = list(MNT)
+    ind = 1
+    for i in keys:
+        for j in range(len(MDT[i])):
+            f.write(f'\n{(ind) }\t{MDT[i][j]}')
+            ind += 1
+
+    f.write('\n\n-----------------------------------------')
+    f.write('\nArgument List Array')
+    f.write('\n-----------------------------------------')
+    f.write('\nIndex\tArgument\n')
+    ind = 1
+    for i in ALA['argument']:
+        f.write(f'\n{(ind) }\t{i}')
+        ind += 1
+
+    f.close()
+
+
+// input 
+
+input.txt
+
+PG1 START
+MACRO
+INCR &ARG1,&ARG2,&ARG3
+A 1,&ARG1
+A 2,&ARG2
+A 3,&ARG3
+MEND
+INCR 5, 3, 8
+END
+
+
+
+#################### Lex Parser #####################################
+
+regex.l (lex file)
+
+%{
+    #include <stdio.h>
+    #include <stdlib.h>
+%}
+
+%option yylineno
+
+alpha [a-zA-Z]
+digit [0-9]
+unary "++"|"--"
+
+%%
+
+"printf"                    { printf("PRINT ");; }
+"scanf"                     { printf("SCAN ");; }
+"int"                       { printf("INT ");; }
+"float"                     { printf("FLOAT ");;; }
+"char"                      { printf("CHAR ");;; }
+"void"                      { printf("VOID ");;; }
+"return"                    { printf("RETURN ");;; }
+"for"	                    { printf("FOR ");;; }
+"if"	                    { printf("IF ");;; }
+"else"	                    { printf("ELSE ");;; }
+^"#include"[ ]*<.+\.h>      { printf("INCLUDE ");;; }
+"true"                      { printf("TRUE ");;; }
+"false"                     { printf("FALSE ");;; }
+[-]?{digit}+                { printf("NUMBER ");;; }
+[-]?{digit}+\.{digit}{1,6}  { printf("FLOAT_NUM ");;; }
+{alpha}({alpha}|{digit})*   { printf("ID ");;; }
+{unary}                     { printf("UNARY ");;; }
+"="                         { printf("ASSIGNMENT ");;; }
+"<="                        { printf("LESS OR EQUAL ");;; }
+">="                        { printf("GREATER OR EQUAL ");;; }
+"=="                        { printf("EQUAL ");;; }
+"!="                        { printf("NOT EQUAL ");;; }
+">"	                        { printf("GREATER ");;; }
+"<"	                        { printf("LESS ");;; }
+"&&"	                    { printf("AND ");;; }
+"||"	                    { printf("OR ");;; }
+"+"                         { printf("ADD ");;; }
+"-"                         { printf("SUBTRACT ");;; }
+"/"                         { printf("DIVIDE ");;; }
+"*"                         { printf("MULTIPLY ");;; }
+"("                         { printf("OPEN PARENTHESIS ");;; }
+")"                         { printf("CLOSE PARENTHESIS ");;; }
+"{"                         { printf("START CODE BLOCK ");;; }
+"}"                         { printf("END CODE BLOCK ");;; }
+"["                         { printf("START ARRAY DECLERATION ");;; }
+"]"                         { printf("END ARRAY DECLARATION ");;; }
+\/\/.*                      { ; }
+\/\*(.*\n)*.*\*\/           { ; } 
+[ \t]*                      { ; }
+[\n]                        { printf("\nnew line\n");;; }
+";"                         { printf("End of statement\n");;; }
+.	                        { return *yytext; }
+["].*[",]                    { printf("STR ");;; }
+['].[']                     { printf("CHARACTER ");;; }
+
+%%
+
+int main (void) {yylex(); return 0;}
+
+int yywrap() {
+    return 1;
+}
+
+// input 
+
+Fibonacci.c
+
+
+#include <stdio.h>
+
+int Fibonacci ( int n ) {
+    if ( n == 0 ) return 0;
+    if ( n == 1 ) return 1;
+    return Fibonacci(n - 1) + Fibonacci(n - 2);
+}
+
+int main () {
+    int res = Fibonacci(25);
+    printf ( "%d\n", res );
+    return 0;
+}
+
+
+
+// commands
+
+> lex regex.l
+>gcc lex.yy.c
+> ./a.out < Fibonacci.c
+
+
+#################### Arithmetic expr check ########################
+
+*.l (lex file)
+
+%{
+    #include<stdio.h>
+    #include "y.tab.h"
+%}
+%%
+[a-zA-Z]+   return VARIABLE;
+[0-9]+      return NUMBER;
+[ \t]       ;
+[\n]        return 0;
+.           return yytext[0];
+%%
+int yywrap()
+{
+    return 1;
+}
+
+
+*.y (yacc file)
+
+%{
+    #include<stdio.h>
+%}
+
+%token NUMBER
+%token VARIABLE
+%left '+' '-'
+%left '*' '/' '%'
+%left '(' ')'
+
+%%
+S:  VARIABLE'='E {
+    printf("\nEntered arithmetic expression is Valid\n\n");
+    return 0;
+}
+E:  E'+'E
+    |E'-'E
+    |E'*'E
+    |E'/'E
+    |E'%'E
+    |'('E')'
+    | NUMBER
+    | VARIABLE
+;
+%%
+void main()
+{
+    printf("\nEnter Any Arithmetic Expression which can have operations Addition, Subtraction, Multiplication, Divison, Modulus and Round brackets:\n");
+    yyparse();
+}
+int yyerror()
+{
+    printf("\nEntered arithmetic expression is Invalid\n\n");
+}
+
+// commands
+
+> lex *.l 
+> yacc -d *.y
+> gcc lex.yy.c y.tab.c
+> ./a.out
+
+
+
+####################### Infix to Postfix ############################
+
+*.l (lex file)
+
+%{
+#include"y.tab.h"
+extern int yylval;
+%}
+%%
+[0-9]+  {yylval=atoi(yytext); return NUMBER;}
+\n      return 0;
+[ \t]   ;
+.       return *yytext;
+%%
+
+int yywrap(){
+    return 1;
+}
+
+
+*.y (yacc file)
+
+
+
+%{
+#include<stdio.h>
+%}
+%token NUMBER
+%left '+' '-'
+%left '*' '/'
+%right NEGATIVE
+%%
+
+S:  E {printf("\n");}
+    ;
+E:  E '+' E {printf("+");}
+    |   E '*' E {printf("*");}
+    |   E '-' E {printf("-");}
+    |   E '/' E {printf("/");}
+    |   '(' E ')'
+    |   '-' E %prec NEGATIVE {printf("-");}
+    |   NUMBER     {printf("%d", yylval);}
+    ;
+%%
+
+int main(){
+    printf("\nEnter infix expression => ");
+    yyparse();
+}
+
+int yyerror (char *msg) {
+    return printf ("Error: %s\n", msg);
+}
+
+
+
+// commands
+
+> lex *.l 
+> yacc -d *.y
+> gcc lex.yy.c y.tab.c
+> ./a.out
+
+
+
+##########################  Scientific Calci  ########################
+
+*.l (lex file)
+
+%{
+#include "y.tab.h"
+#include<math.h>
+#include<stdio.h>
+%}
+
+%%
+
+[0-9]+		{yylval.num=atof(yytext); return number;}
+[-+*/]		{return yytext[0];}
+COS|cos 	{return cos1; }
+SIN|sin 	{return sin1; }
+TAN|tan 	{return tan1; }
+
+%%
+
+int yywrap(){
+	return 1;
+}
+
+
+
+*.y (yacc file)
+
+%{
+#include<stdio.h>
+#include<math.h>
+#include<stdlib.h>
+int yylex(void);
+%}
+
+%union {double num;}
+%start line
+%token cos1
+%token sin1
+%token tan1
+%token <num> number
+%type  <num> exp
+
+%%
+
+line	: exp 			
+	| line exp  		
+	;
+
+exp	: number		{$$=$1;}	
+	| exp '+' number	{$$=$1+$3;printf("\n%f+%f=%f\n",$1,$3,$$);}
+	| exp '-' number	{$$=$1-$3;printf("\n%f-%f=%f\n",$1,$3,$$);}
+	| exp '*' number	{$$=$1*$3;printf("\n%f*%f=%f\n",$1,$3,$$);}
+	| exp '/' number	{$$=$1/$3;printf("\n%f/%f=%f\n",$1,$3,$$);}
+	| cos1 number 		{printf("%f",cos(($2/180)*3.14));}
+	| sin1 number 		{printf("%f",sin(($2/180)*3.14));}
+	| tan1 number 		{printf("%f",tan(($2/180)*3.14));}
+	;
+
+%%
+
+int main(){
+yyparse();
+ return 0;
+}
+int yyerror(){
+exit(0);
+}
+
+
+// commands
+
+> lex *.l 
+> yacc -d *.y
+> gcc lex.yy.c y.tab.c -lm
+> ./a.out
+
